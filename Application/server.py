@@ -1,279 +1,170 @@
 from flask import Flask, request
-from flask_restful import Resource, Api
-import datetime
+from flask_restplus import Api, Resource, fields
+from werkzeug.contrib.fixers import ProxyFix
 import mysql.connector
-import json
+import datetime
 
 app = Flask(__name__)
-api = Api(app)
+app.wsgi_app = ProxyFix(app.wsgi_app)
+api = Api(app, version='1.0', title='Taurus API', description='First Taurus API')
+
+cr = api.namespace('Create', description='Methods to insert into the database.')
+ct = api.namespace('Consult', description='Methods to consult the database.')
+
+User = api.model('User', {
+    'usr_name': fields.String(required=True, description='Name of the user.'),
+    'usr_pwd': fields.String(required=True, description='Password of the user.'),
+    'usr_email': fields.String(required=True, description='E-mail of the user.'),
+    'usr_birth': fields.Date(required=True, description='Birthdate of the user.'),
+    'usr_address': fields.String(required=True, description='Address of the user.'),
+    'usr_cpf': fields.String(required=True, description='CPF of the user.')})
+
+Account = api.model('Account', {
+    'usr_pwd': fields.String(required=True, description='Password of the user.'),
+    'usr_name': fields.String(required=True, description='Name of the user.'),
+    'acc_alias': fields.String(required=True, description='Name of the account.')})
 
 
-class CreateUser(Resource):
+class TaurusDB(object):
 
-    @staticmethod
-    def post():
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
+    def __init__(self):
+        self.Taurus = mysql.connector.connect(
             host="localhost",
             user="matt",
             password='Test!1234',
             database="Taurus"
         )
+        self.Taurus.autocommit = True
+        self.cursor = self.Taurus.cursor()
 
-        if database.is_connected():
-            if len(args) == 6:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""insert into Taurus.users(`usr_name`, `usr_birth`, `usr_cpf`, `usr_email`, 
-                    `usr_pwd`, `usr_credate`, `usr_id`,`usr_address`) values('{args['usr_name']}',
-                    '{args['usr_birth']}','{args['usr_cpf']}','{args['usr_email']}','{args['usr_pwd']}',
-                    '{datetime.datetime.now().strftime('%Y-%m-%d')}', uuid(), '{args['usr_address']}')""")
-                except mysql.connector.errors.IntegrityError:
-                    return dict(MESSAGE='Some of the information is already taken.'), 400
-                cursor.execute(f"""select usr_id from Taurus.users where usr_name = '{args['usr_name']}'""")
-                answer = cursor.fetchall()[0]
-                return dict(USERID=answer[0]), 200
-        else:
+    def __del__(self):
+        self.Taurus.close()
+
+    def createuser(self, data):
+        try:
+            self.cursor.execute(f"""insert into Taurus.users(`usr_name`, `usr_birth`, `usr_cpf`, `usr_email`, 
+                    `usr_pwd`, `usr_credate`, `usr_id`,`usr_address`) values('{data['usr_name']}',
+                    '{data['usr_birth']}','{data['usr_cpf']}','{data['usr_email']}','{data['usr_pwd']}',
+                    '{datetime.datetime.now().strftime('%Y-%m-%d')}', uuid(), '{data['usr_address']}')""")
+        except mysql.connector.errors.IntegrityError:
+            return dict(MESSAGE='Some of the information is already taken.'), 400
+        except:
+            return 500
+        return 201
+
+    def getuserid(self, data):
+        try:
+            self.cursor.execute(f"""select usr_id from Taurus.users where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}'""")
+            answer = self.cursor.fetchall()[0]
+            return dict(usr_id=answer[0]), 200
+        except:
+            return 500
+
+    def getaccountid(self, data):
+        try:
+            self.cursor.execute(f"""select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}'""")
+            answer = self.cursor.fetchall()[0]
+            return dict(acc_id=answer[0]), 200
+        except:
+            return 500
+
+    def createaccount(self, data):
+        try:
+            usr_id = self.getuserid(data)[0]['usr_id']
+            self.cursor.execute(
+                f"""insert into Taurus.accounts(`usr_id`, `acc_credate`, `acc_alias`, `acc_id`) values('{usr_id}', '{datetime.datetime.now().strftime('%Y-%m-%d')}','{data['acc_alias']}', uuid())""")
+        except mysql.connector.errors.IntegrityError:
+            return dict(MESSAGE='This user already have an account by that alias.'), 400
+        except:
+            return 500
+        return 201
+
+    def createtransaction(self, data):
+        try:
+            acc_id = self.getaccountid(data)[0]['acc_id']
+            self.cursor.execute(f"""insert into Taurus.transactions(`tra_tag`, `tra_date`, `acc_id`, `tra_value`, `tra_id`) values('{data['tra_tag']}', '{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', '{acc_id}', {data['tra_value']}, uuid())""")
+        except:
+            return 500
+        return 201
+
+    def getbalance(self, data):
+        try:
+            acc_id = self.getaccountid(data)[0]['acc_id']
+            self.cursor.execute(f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), acc_bal from Taurus.balance where acc_id = '{acc_id}'""")
+            answer = self.cursor.fetchall()
+            answer = dict((each[0], float(each[1])) for each in answer)
+            return dict(answer), 200
+        except:
+            return 500
+
+    def gettransactions(self, data):
+        try:
+            self.cursor.execute(f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), t.tra_tag, tra_value, tra_id from Taurus.transactions as t inner join (select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}') as j on j.acc_id = t.acc_id""")
+            answer = self.cursor.fetchall()
+            answer = dict((each[3], (each[1], float(each[2]), each[0])) for each in answer)
+            return dict(answer), 200
+        except:
             return 500
 
 
+Taurus = TaurusDB()
+
+
+@cr.route('/user')
+class CreateUserAPI(Resource):
+    @cr.doc('Create user.')
+    @cr.expect(User)
+    def post(self):
+        return Taurus.createuser(api.payload)
+
+
+@cr.route('/account')
+class CreateAccountAPI(Resource):
+    @cr.doc('Create Account.')
+    @cr.expect(Account)
+    def post(self):
+        return Taurus.createaccount(api.payload)
+
+
+@cr.route('/transaction')
+class CreateAccountAPI(Resource):
+    @cr.doc('Create Account.')
+    @cr.expect(Account)
+    def post(self):
+        return Taurus.createtransaction(api.payload)
+
+
+@ct.route('/userid', methods=['GET'])
 class GetUserId(Resource):
-
-    @staticmethod
-    def post():
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 1:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""select usr_id from Taurus.users where usr_name = '{args['usr_name']}'""")
-                    answer = cursor.fetchall()[0]
-                    return dict(USERID=answer[0]), 200
-                except:
-                    return 500
-        else:
-            return 500
+    @cr.doc('Get user id.')
+    def get(self):
+        data = request.args.to_dict()
+        return Taurus.getuserid(data)
 
 
-class GetUserData(Resource):
-
-    @staticmethod
-    def post():
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 2:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""select usr_name, usr_birth, usr_email, usr_cpf, usr_credate, usr_address from Taurus.users where usr_name = '{args['usr_name']}' and usr_pwd = '{args['usr_pwd']}'""")
-                    answer = cursor.fetchall()[0]
-                    return dict(USERID=answer[0]), 200
-                except:
-                    return 500
-        else:
-            return 500
+@ct.route('/accountid', methods=['GET'])
+class GetUserId(Resource):
+    @cr.doc('Get account id.')
+    def get(self):
+        data = request.args.to_dict()
+        return Taurus.getaccountid(data)
 
 
-class CreateAccount(Resource):
-
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 2:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(
-                        f"""insert into Taurus.accounts(`usr_id`, `acc_credate`, `acc_alias`, `acc_id`) values('{args['usr_id']}', '{datetime.datetime.now().strftime('%Y-%m-%d')}','{args['acc_alias']}', uuid())""")
-                except mysql.connector.errors.IntegrityError:
-                    return dict(MESSAGE='This user already have an account by that alias.'), 400
-                cursor.execute(
-                    f"""select acc_id from Taurus.accounts where usr_id = '{args['usr_id']}' and acc_alias = '{args['acc_alias']}'""")
-                answer = cursor.fetchall()[0]
-                return dict(ACCOUNTID=answer[0]), 200
-        else:
-            return 500
+@ct.route('/balance', methods=['GET'])
+class GetUserId(Resource):
+    @cr.doc('Get account balance.')
+    def get(self):
+        data = request.args.to_dict()
+        return Taurus.getbalance(data)
 
 
-class GetAccountId(Resource):
+@ct.route('/transactions', methods=['GET'])
+class GetUserId(Resource):
+    @cr.doc('Get transaction data.')
+    def get(self):
+        data = request.args.to_dict()
+        return Taurus.gettransactions(data)
 
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 2:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""select acc_id from Taurus.accounts where usr_id = '{args['usr_id']}' and acc_alias = '{args['acc_alias']}'""")
-                    answer = cursor.fetchall()[0]
-                    return dict(ACCOUNTID=answer[0]), 200
-                except mysql.connector.errors.IntegrityError:
-                    return 500
-        else:
-            return 500
-
-
-class GetAccountData(Resource):
-
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 2:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""select usr_id, acc_alias, acc_credate from Taurus.accounts where usr_id = '{args['usr_id']}' and acc_alias = '{args['acc_alias']}'""")
-                    answer = cursor.fetchall()[0]
-                    return dict(ACCOUNTID=answer[0]), 200
-                except mysql.connector.errors.IntegrityError:
-                    return 500
-        else:
-            return 500
-
-
-class GetAccountBalance(Resource):
-
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 2:
-                database.autocommit = True
-                cursor = database.cursor()
-                try:
-                    cursor.execute(f"""select acc_id from Taurus.accounts where usr_id = '{args['usr_id']}' and acc_alias = '{args['acc_alias']}'""")
-                    answer = cursor.fetchall()[0]
-                    return dict(ACCOUNTID=answer[0]), 200
-                except mysql.connector.errors.IntegrityError:
-                    return 500
-        else:
-            return 500
-
-
-class AddTransaction(Resource):
-
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 3:
-                database.autocommit = True
-                cursor = database.cursor()
-                time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute(
-                    f"""insert into Taurus.transactions(`tra_tag`, `tra_date`, `acc_id`, `tra_value`, `tra_id`) values('{args['tra_tag']}', '{time}', '{args['acc_id']}', {args['tra_value']}, uuid())""")
-                cursor.execute(
-                    f"""select tra_id from Taurus.transactions where acc_id = '{args['acc_id']}' and tra_value = {args['tra_value']} and tra_tag = '{args['tra_tag']}' and tra_date = '{time}'""")
-                answer = cursor.fetchall()[0]
-                return dict(TRANSACTIONID=answer[0]), 200
-        else:
-            return 500
-
-
-class GetTransactionData(Resource):
-
-    @staticmethod
-    def post():
-
-        args = json.loads(request.data)
-
-        database = mysql.connector.connect(
-            host="localhost",
-            user="matt",
-            password='Test!1234',
-            database="Taurus"
-        )
-
-        if database.is_connected():
-            if len(args) == 1:
-                database.autocommit = True
-                cursor = database.cursor()
-                cursor.execute(
-                    f"""select tra_tag, tra_date, tra_value, acc_id from Taurus.transactions where tra_id = '{args['tra_id']}'""")
-                answer = cursor.fetchall()[0]
-                return dict(TRANSACTIONID=answer[0]), 200
-        else:
-            return 500
-
-
-api.add_resource(CreateUser, '/createuser')
-api.add_resource(GetUserId, '/getuserid')
-api.add_resource(GetUserData, '/getuserid')
-
-api.add_resource(CreateAccount, '/createaccount')
-api.add_resource(GetAccountId, '/getaccountid')
-api.add_resource(GetAccountData, '/getaccountid')
-api.add_resource(GetAccountBalance, '/getaccountid')
-
-api.add_resource(AddTransaction, '/addtransaction')
-api.add_resource(GetTransactionData, '/getaccountid')
 
 if __name__ == '__main__':
-    app.run(port=1996)
+    app.run(debug=True)
