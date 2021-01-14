@@ -22,7 +22,7 @@ GPIO.output(led, GPIO.LOW)
 class TurnLedOn(Resource):
     @ha.doc('Turn led on.')
     def get(self):
-        GPIO.output('led', GPIO.HIGH)
+        GPIO.output(led, GPIO.HIGH)
         return {"Message": "Turned on."}, 200
 
 
@@ -30,7 +30,7 @@ class TurnLedOn(Resource):
 class TurnLedOff(Resource):
     @ha.doc('Turn led off.')
     def get(self):
-        GPIO.output('led', GPIO.LOW)
+        GPIO.output(led, GPIO.LOW)
         return {"Message": "Turned off."}, 200
 
 
