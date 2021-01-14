@@ -13,14 +13,18 @@ ha = api.namespace('HomeAutomation', description = 'Methods to control the house
 
 @ha.route('/turnledon', methods=['GET'])
 class TurnLedOn(Resource):
-    led = LED(17)
-    led.on()
+    @ha.doc('Turn led on.')
+    def get(self):
+        led = LED(17)
+        led.on()
 
 
 @ha.route('/turnledoff', methods=['GET'])
 class TurnLedOff(Resource):
-    led = LED(17)
-    led.off()
+    @ha.doc('Turn led off.')
+    def get(self):
+        led = LED(17)
+        led.off()
 
 
 if __name__ == '__main__':
