@@ -17,6 +17,7 @@ class TurnLedOn(Resource):
     def get(self):
         led = LED(17)
         led.on()
+        return {"Message": "Turned on."}, 200
 
 
 @ha.route('/turnledoff', methods=['GET'])
@@ -25,6 +26,7 @@ class TurnLedOff(Resource):
     def get(self):
         led = LED(17)
         led.off()
+        return {"Message": "Turned off."}, 200
 
 
 if __name__ == '__main__':
