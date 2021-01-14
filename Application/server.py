@@ -3,6 +3,7 @@ from flask_restplus import Api, Resource, fields
 from werkzeug.contrib.fixers import ProxyFix
 import mysql.connector
 import datetime
+from gpiozero import LED
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app)
@@ -10,6 +11,7 @@ api = Api(app, version='1.0', title='Taurus API', description='First Taurus API'
 
 cr = api.namespace('Create', description='Methods to insert into the database.')
 ct = api.namespace('Consult', description='Methods to consult the database.')
+ha = api.namespace('HomeAutomation', description = 'Methods to control the house.')
 
 User = api.model('User', {
     'usr_name': fields.String(required=True, description='Name of the user.'),
@@ -136,7 +138,7 @@ class CreateAccountAPI(Resource):
 
 @ct.route('/userid', methods=['GET'])
 class GetUserId(Resource):
-    @cr.doc('Get user id.')
+    @ct.doc('Get user id.')
     def get(self):
         data = request.args.to_dict()
         return Taurus.getuserid(data)
@@ -144,7 +146,7 @@ class GetUserId(Resource):
 
 @ct.route('/accountid', methods=['GET'])
 class GetUserId(Resource):
-    @cr.doc('Get account id.')
+    @ct.doc('Get account id.')
     def get(self):
         data = request.args.to_dict()
         return Taurus.getaccountid(data)
@@ -152,7 +154,7 @@ class GetUserId(Resource):
 
 @ct.route('/balance', methods=['GET'])
 class GetUserId(Resource):
-    @cr.doc('Get account balance.')
+    @ct.doc('Get account balance.')
     def get(self):
         data = request.args.to_dict()
         return Taurus.getbalance(data)
@@ -160,10 +162,22 @@ class GetUserId(Resource):
 
 @ct.route('/transactions', methods=['GET'])
 class GetUserId(Resource):
-    @cr.doc('Get transaction data.')
+    @ct.doc('Get transaction data.')
     def get(self):
         data = request.args.to_dict()
         return Taurus.gettransactions(data)
+
+
+@ha.route('/turnledon', methods=['GET'])
+class TurnLedOn(Resource):
+    led = LED(17)
+    led.on()
+
+
+@ha.route('/turnledoff', methods=['GET'])
+class TurnLedOff(Resource):
+    led = LED(17)
+    led.off()
 
 
 if __name__ == '__main__':
