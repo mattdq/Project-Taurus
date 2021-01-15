@@ -3,7 +3,8 @@ from flask_restplus import Api, Resource, fields
 from werkzeug.contrib.fixers import ProxyFix
 import mysql.connector
 import datetime
-from gpiozero import LED
+
+import RPi.GPIO as GPIO
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app)
@@ -11,7 +12,7 @@ api = Api(app, version='1.0', title='Taurus API', description='First Taurus API'
 
 cr = api.namespace('Create', description='Methods to insert into the database.')
 ct = api.namespace('Consult', description='Methods to consult the database.')
-ha = api.namespace('HomeAutomation', description = 'Methods to control the house.')
+ha = api.namespace('HomeAutomation', description='Methods to control the house.')
 
 User = api.model('User', {
     'usr_name': fields.String(required=True, description='Name of the user.'),
@@ -25,6 +26,9 @@ Account = api.model('Account', {
     'usr_pwd': fields.String(required=True, description='Password of the user.'),
     'usr_name': fields.String(required=True, description='Name of the user.'),
     'acc_alias': fields.String(required=True, description='Name of the account.')})
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
 
 
 class TaurusDB(object):
@@ -56,7 +60,8 @@ class TaurusDB(object):
 
     def getuserid(self, data):
         try:
-            self.cursor.execute(f"""select usr_id from Taurus.users where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}'""")
+            self.cursor.execute(
+                f"""select usr_id from Taurus.users where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}'""")
             answer = self.cursor.fetchall()[0]
             return dict(usr_id=answer[0]), 200
         except:
@@ -64,7 +69,8 @@ class TaurusDB(object):
 
     def getaccountid(self, data):
         try:
-            self.cursor.execute(f"""select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}'""")
+            self.cursor.execute(
+                f"""select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}'""")
             answer = self.cursor.fetchall()[0]
             return dict(acc_id=answer[0]), 200
         except:
@@ -84,7 +90,8 @@ class TaurusDB(object):
     def createtransaction(self, data):
         try:
             acc_id = self.getaccountid(data)[0]['acc_id']
-            self.cursor.execute(f"""insert into Taurus.transactions(`tra_tag`, `tra_date`, `acc_id`, `tra_value`, `tra_id`) values('{data['tra_tag']}', '{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', '{acc_id}', {data['tra_value']}, uuid())""")
+            self.cursor.execute(
+                f"""insert into Taurus.transactions(`tra_tag`, `tra_date`, `acc_id`, `tra_value`, `tra_id`) values('{data['tra_tag']}', '{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', '{acc_id}', {data['tra_value']}, uuid())""")
         except:
             return 500
         return 201
@@ -92,7 +99,8 @@ class TaurusDB(object):
     def getbalance(self, data):
         try:
             acc_id = self.getaccountid(data)[0]['acc_id']
-            self.cursor.execute(f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), acc_bal from Taurus.balance where acc_id = '{acc_id}'""")
+            self.cursor.execute(
+                f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), acc_bal from Taurus.balance where acc_id = '{acc_id}'""")
             answer = self.cursor.fetchall()
             answer = dict((each[0], float(each[1])) for each in answer)
             return dict(answer), 200
@@ -101,7 +109,8 @@ class TaurusDB(object):
 
     def gettransactions(self, data):
         try:
-            self.cursor.execute(f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), t.tra_tag, tra_value, tra_id from Taurus.transactions as t inner join (select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}') as j on j.acc_id = t.acc_id""")
+            self.cursor.execute(
+                f"""select DATE_FORMAT(tra_date,'%Y-%m-%d'), t.tra_tag, tra_value, tra_id from Taurus.transactions as t inner join (select a.acc_id from Taurus.accounts as a inner join Taurus.users as u on u.usr_id = a.usr_id where usr_name = '{data['usr_name']}' and usr_pwd = '{data['usr_pwd']}' and acc_alias = '{data['acc_alias']}') as j on j.acc_id = t.acc_id""")
             answer = self.cursor.fetchall()
             answer = dict((each[3], (each[1], float(each[2]), each[0])) for each in answer)
             return dict(answer), 200
@@ -170,15 +179,37 @@ class GetUserId(Resource):
 
 @ha.route('/turnledon', methods=['GET'])
 class TurnLedOn(Resource):
-    led = LED(17)
-    led.on()
+    @ha.doc('Turn led on.')
+    def get(self):
+        GPIO.output(17, GPIO.HIGH)
+        return {"Message": "Turned on."}, 200
 
 
 @ha.route('/turnledoff', methods=['GET'])
 class TurnLedOff(Resource):
-    led = LED(17)
-    led.off()
+    @ha.doc('Turn led off.')
+    def get(self):
+        GPIO.output(17, GPIO.LOW)
+        return {"Messae": "Turned off."}, 200
+
+
+@ha.route('/led', methods=['GET'])
+class TurnLedOff(Resource):
+    @ha.doc('Change led.')
+    def get(self):
+        pin = request.args.get('pin')
+        mode = request.args.get('mode')
+        if mode == 'HIGH':
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.HIGH)
+            return {"Message": "Turned on."}, 200
+        elif mode == 'LOW':
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.LOW)
+            return {"Message": "Turned off."}, 200
+        else:
+            return {"Message": "Wrong input."}, 400
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0')

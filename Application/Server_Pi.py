@@ -31,7 +31,7 @@ class TurnLedOff(Resource):
     @ha.doc('Turn led off.')
     def get(self):
         GPIO.output(led, GPIO.LOW)
-        return {"Message": "Turned off."}, 200
+        return {"Messae": "Turned off."}, 200
 
 
 if __name__ == '__main__':
