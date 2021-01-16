@@ -197,8 +197,8 @@ class TurnLedOff(Resource):
 class TurnLedOff(Resource):
     @ha.doc('Change led.')
     def get(self):
-        pin = request.args.get('pin')
-        mode = request.args.get('mode')
+        pin = int(request.args.get('pin'))
+        mode = str(request.args.get('mode'))
         if mode == 'HIGH':
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.HIGH)
