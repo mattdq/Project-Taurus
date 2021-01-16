@@ -177,22 +177,6 @@ class GetUserId(Resource):
         return Taurus.gettransactions(data)
 
 
-@ha.route('/turnledon', methods=['GET'])
-class TurnLedOn(Resource):
-    @ha.doc('Turn led on.')
-    def get(self):
-        GPIO.output(17, GPIO.HIGH)
-        return {"Message": "Turned on."}, 200
-
-
-@ha.route('/turnledoff', methods=['GET'])
-class TurnLedOff(Resource):
-    @ha.doc('Turn led off.')
-    def get(self):
-        GPIO.output(17, GPIO.LOW)
-        return {"Messae": "Turned off."}, 200
-
-
 @ha.route('/led', methods=['GET'])
 class TurnLedOff(Resource):
     @ha.doc('Change led.')

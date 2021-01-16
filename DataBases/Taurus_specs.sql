@@ -41,7 +41,7 @@ SET SQL_SAFE_UPDATES = 0;
 
 CREATE ALGORITHM=UNDEFINED DEFINER=`matt`@`localhost` SQL SECURITY DEFINER VIEW `Taurus`.`balance` AS(
 select `Taurus`.`transactions`.`acc_id` AS `acc_id`,
-cast(`Taurus`.`transactions`.`tra_date` as date) AS `DATE(tra_date)`,
+cast(`Taurus`.`transactions`.`tra_date` as date) AS `tra_date`,
 sum(sum(`Taurus`.`transactions`.`tra_value`)) 
 OVER (PARTITION BY `Taurus`.`transactions`.`acc_id` 
 ORDER BY cast(`Taurus`.`transactions`.`tra_date` as date) )  AS `acc_bal` 
