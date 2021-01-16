@@ -37,7 +37,7 @@ class TaurusDB(object):
         self.Taurus = mysql.connector.connect(
             host="localhost",
             user="matt",
-            password='Test!1234',
+            password='MattDq1!123',
             database="Taurus"
         )
         self.Taurus.autocommit = True
