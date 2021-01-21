@@ -3,6 +3,7 @@ from flask_restplus import Api, Resource, fields
 from werkzeug.contrib.fixers import ProxyFix
 import mysql.connector
 import datetime
+from waitress import serve
 
 import RPi.GPIO as GPIO
 
@@ -197,4 +198,4 @@ class TurnLedOff(Resource):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    serve(app, host='0.0.0.0', port=5000)
