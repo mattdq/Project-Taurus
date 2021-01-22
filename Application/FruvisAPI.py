@@ -4,6 +4,7 @@ from werkzeug.contrib.fixers import ProxyFix
 import mysql.connector
 import datetime
 from waitress import serve
+from sonoff import Sonoff
 
 import RPi.GPIO as GPIO
 
@@ -196,6 +197,28 @@ class TurnLedOff(Resource):
         else:
             return {"Message": "Wrong input."}, 400
 
+
+@ha.route('/light', methods=['GET'])
+class TurnLedOff(Resource):
+    @ha.doc('Change lights.')
+    def get(self):
+        mode = str(request.args.get('mode'))
+        s = Sonoff('matheusantunesmvs@gmail.com', '12345678', 'us')
+        devices = s.get_devices()
+        if devices:
+            # We found a device, lets turn something on
+            device_id = devices[0]['deviceid']
+
+            if mode == 'HIGH':
+                s.switch('off', device_id, None)
+                return {"Message": "Turned on."}, 200
+            elif mode == 'LOW':
+                s.switch('off', device_id, None)
+                return {"Message": "Turned off."}, 200
+            else:
+                return {"Message": "Wrong input."}, 400
+        else:
+            return 500
 
 if __name__ == '__main__':
     serve(app, host='0.0.0.0', port=5000)
