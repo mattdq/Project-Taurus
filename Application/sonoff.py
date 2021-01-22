@@ -133,6 +133,59 @@ class Sonoff():
 
         self.update_devices()  # to get the devices list
 
+    def set_wshost(self):
+        r = requests.post('https://%s-disp.coolkit.cc:8080/dispatch/app' % self._api_region, headers=self._headers)
+        resp = r.json()
+
+        if 'error' in resp and resp['error'] == 0 and 'domain' in resp:
+            self._wshost = resp['domain']
+            _LOGGER.info("Found websocket address: %s", self._wshost)
+        else:
+            raise Exception('No websocket domain')
+
+    def update_devices(self):
+
+        # the login failed, nothing to update
+        if not self._wshost:
+            return []
+
+        # we are in the grace period, no updates to the devices
+        if self._skipped_login and self.is_grace_period():
+            _LOGGER.info("Grace period active")
+            return self._devices
+
+        query_params = {
+            'lang': 'en',
+            'version': self._version,
+            'ts': int(time.time()),
+            'nonce': gen_nonce(15),
+            'appid': self._appid,
+            'imei': str(uuid.uuid4()),
+            'os': self._os,
+            'model': self._model,
+            'romVersion': self._rom_version,
+            'appVersion': self._app_version
+        }
+        r = requests.get('https://{}-api.coolkit.cc:8080/api/user/device'.format(self._api_region),
+                         params=query_params,
+                         headers=self._headers)
+
+        resp = r.json()
+        if 'error' in resp and resp['error'] in [HTTP_BAD_REQUEST, HTTP_UNAUTHORIZED]:
+            # @IMPROVE add maybe a service call / switch to deactivate sonoff component
+            if self.is_grace_period():
+                _LOGGER.warning("Grace period activated!")
+
+                # return the current (and possible old) state of devices
+                # in this period any change made with the mobile app (on/off) won't be shown in HA
+                return self._devices
+
+            _LOGGER.info("Re-login component")
+            self.do_login()
+
+        self._devices = resp.get('devicelist', [])
+        return self._devices
+
     def get_devices(self, force_update=False):
         if force_update:
             return self.update_devices()
@@ -269,3 +322,7 @@ class Sonoff():
 
         return new_state
 
+s = Sonoff('matheusantunesmvs@gmail.com', '12345678', 'us')
+devices = s.get_devices()
+device_id = devices[0]['deviceid']
+s.switch('off', device_id, None)

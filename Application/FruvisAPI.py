@@ -6,6 +6,19 @@ import datetime
 from waitress import serve
 from sonoff import Sonoff
 
+import logging, time, hmac, hashlib, random, base64, json, socket, requests, re, uuid
+from datetime import timedelta
+
+SCAN_INTERVAL = timedelta(seconds=60)
+HTTP_MOVED_PERMANENTLY, HTTP_BAD_REQUEST, HTTP_UNAUTHORIZED, HTTP_NOT_FOUND = 301, 400, 401, 404
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def gen_nonce(length=8):
+    """Generate pseudorandom number."""
+    return ''.join([str(random.randint(0, 9)) for i in range(length)])
+
 import RPi.GPIO as GPIO
 
 app = Flask(__name__)
@@ -210,7 +223,7 @@ class TurnLedOff(Resource):
             device_id = devices[0]['deviceid']
 
             if mode == 'HIGH':
-                s.switch('off', device_id, None)
+                s.switch('on', device_id, None)
                 return {"Message": "Turned on."}, 200
             elif mode == 'LOW':
                 s.switch('off', device_id, None)
