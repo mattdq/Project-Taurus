@@ -43,8 +43,8 @@ Account = api.model('Account', {
     'usr_name': fields.String(required=True, description='Name of the user.'),
     'acc_alias': fields.String(required=True, description='Name of the account.')})
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
+#GPIO.setmode(GPIO.BCM)
+#GPIO.setwarnings(False)
 
 
 class TaurusDB(object):
@@ -234,4 +234,4 @@ class TurnLedOff(Resource):
             return 500
 
 if __name__ == '__main__':
-    serve(app, host='0.0.0.0', port=5000)
+    serve(app, host='0.0.0.0', port=5002)
